@@ -29,7 +29,10 @@ go.work.sum
 .vscode
 .idea
 
-# development tmp folder
+# Development tmp folder
 dev_data
 test_data
 plots
+
+# Test results
+test/charts
