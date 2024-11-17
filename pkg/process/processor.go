@@ -3,8 +3,8 @@ package process
 import (
 	"fmt"
 
-	"github.com/baranov-V-V/ccv/pkg/plot"
-	"github.com/baranov-V-V/ccv/pkg/read"
+	"github.com/vbvictor/ccv/pkg/plot"
+	"github.com/vbvictor/ccv/pkg/read"
 )
 
 type ComplexityInputType int

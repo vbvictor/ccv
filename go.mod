@@ -1,4 +1,4 @@
-module github.com/baranov-V-V/ccv
+module github.com/vbvictor/ccv
 
 go 1.22.2
 
