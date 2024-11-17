@@ -36,3 +36,6 @@ plots
 
 # Test results
 test/charts
+
+# Goreleaser
+dist

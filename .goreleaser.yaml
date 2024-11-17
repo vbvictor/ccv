@@ -1,0 +1,88 @@
+version: 2
+
+project_name: ccv
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - binary: ccv
+    main: ./
+    env:
+      - CGO_ENABLED=0
+    goos:
+    - linux
+    - windows
+    - darwin
+    goarch:
+      - amd64
+      - arm64
+      - riscv64
+
+archives:
+  - format: tar.gz
+    wrap_in_directory: true
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    files:
+      - LICENSE
+      - README.md
+
+snapshot:
+  version_template: SNAPSHOT-{{ .Commit }}
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - Merge pull request
+      - Merge branch
+
+source:
+  enabled: true
+  name_template: '{{ .ProjectName }}-{{ .Version }}-source'
+
+release:
+  github:
+    owner: vbvictor
+    name: ccv
+  header: |
+    `ccv` is a free and open-source churn complexity visualizer.
+
+nfpms:
+  - id: ccv-nfpms
+    package_name: ccv
+    file_name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    homepage: https://github.com/vbvictor/ccv
+    maintainer: "Victor Baranov <https://github.com/vbvictor>"
+    description: Churn complexity visualizer
+    license: MIT
+    section: golang
+    formats:
+      - deb
+      - rpm
+    umask: 0o022
+    overrides:
+      deb:
+        contents:
+          - src: LICENSE
+            dst: /usr/share/doc/ccv/copyright
+          - src: README.md
+            dst: /usr/share/doc/ccv/README.md
+        recommends:
+          - golang-go
+      rpm:
+        contents:
+          - src: LICENSE
+            dst: /usr/share/doc/ccv/LICENSE
+          - src: README.md
+            dst: /usr/share/doc/ccv/README.md
+        recommends:
+          - /usr/bin/go
+    rpm:
+      group: Development/Tools
