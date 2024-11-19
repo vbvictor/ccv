@@ -39,3 +39,7 @@ test/charts
 
 # Goreleaser
 dist
+
+# Go coverage
+coverage.out
+coverage.html
