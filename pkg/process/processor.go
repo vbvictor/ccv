@@ -22,8 +22,6 @@ const (
 
 var Version = "0.0.1"
 
-var Verbose = false
-
 var ComplexityInput ComplexityInputType = Lizard
 
 var ChurnInput ChurnInputType = ModifiedScript

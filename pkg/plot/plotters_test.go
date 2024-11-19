@@ -44,39 +44,49 @@ func readCSVToChartEntries(filepath string) ([]ScatterEntry, error) {
 	return entries, nil
 }
 
-func createTestChart(t *testing.T, entries []ScatterEntry, outputPath string) {
-	t.Helper()
+func createTestChart(t *testing.T, entries []ScatterEntry, outputPath string) { 
 	err := CreateScatterChart(entries, NewRisksMapper(), outputPath)
-	if err != nil {
-		t.Fatalf("Failed to create chart: %v", err)
-	}
+	assert.NoError(t, err)
 
 	_, err = os.Stat(outputPath)
-	if err != nil {
-		t.Fatalf("Output file was not created: %v", err)
-	}
+	assert.NoError(t, err)
 }
 
 var CSVDataDir = "../../test/data/"
 var OutputDir = "../../test/charts/"
 
-func TestCreateScatterChart200(t *testing.T) {
-	entries, err := readCSVToChartEntries(CSVDataDir+"plot_200.csv")
+func TestCreateScatterCharts(t *testing.T) {
+	err := os.MkdirAll(OutputDir, 0755)
 	assert.NoError(t, err)
 
-	createTestChart(t, entries, OutputDir+"scatter-200.html")
-}
+	testCases := []struct {
+		name     string
+		csvFile  string
+		outFile  string
+	}{
+		{
+			name:    "200 different entries",
+			csvFile: "plot_200.csv",
+			outFile: "scatter-200.html",
+		},
+		{
+			name:    "2000 different entries",
+			csvFile: "plot_2000.csv",
+			outFile: "scatter-2000.html",
+		},
+		{
+			name:    "10 same entries",
+			csvFile: "plot_10-same.csv",
+			outFile: "scatter-10-same.html",
+		},
+	}
 
-func TestCreateScatterChart2000(t *testing.T) {
-	entries, err := readCSVToChartEntries(CSVDataDir+"plot_2000.csv")
-	assert.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entries, err := readCSVToChartEntries(CSVDataDir + tc.csvFile)
+			assert.NoError(t, err)
 
-	createTestChart(t, entries, OutputDir+"scatter-2000.html")
-}
-
-func TestCreateScatterChart10SameValues(t *testing.T) {
-	entries, err := readCSVToChartEntries(CSVDataDir + "plot_10-same.csv")
-	assert.NoError(t, err)
-
-	createTestChart(t, entries, OutputDir+"scatter-10-same.html")
+			createTestChart(t, entries, OutputDir+tc.outFile)
+		})
+	}
 }
