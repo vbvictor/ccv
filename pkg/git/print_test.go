@@ -2,17 +2,17 @@ package git
 
 import (
 	"bytes"
+	"github.com/vbvictor/ccv/pkg/complexity"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vbvictor/ccv/pkg/read"
 )
 
 func TestPrintTable(t *testing.T) {
 	var buf bytes.Buffer
 
-	results := []*read.ChurnChunk{
+	results := []*complexity.ChurnChunk{
 		{
 			File:    "main.go",
 			Churn:   20,
@@ -49,7 +49,7 @@ func TestPrintTable(t *testing.T) {
 func TestPrintJSON(t *testing.T) {
 	var buf bytes.Buffer
 
-	results := []*read.ChurnChunk{
+	results := []*complexity.ChurnChunk{
 		{
 			File:    "main.go",
 			Churn:   10,
@@ -63,13 +63,13 @@ func TestPrintJSON(t *testing.T) {
 	until, _ := time.Parse("2006-01-02", "2024-01-31")
 
 	opts := ChurnOptions{
-		Top:          1,
-		SortBy:       "churn",
-		Path:         "src/",
-		ExcludePath:  "vendor/",
-		Extensions:   ".go,.ts",
-		Since:        Date{since},
-		Until:        Date{until},
+		Top:         1,
+		SortBy:      "churn",
+		Path:        "src/",
+		ExcludePath: "vendor/",
+		Extensions:  ".go,.ts",
+		Since:       Date{since},
+		Until:       Date{until},
 	}
 
 	printJSON(results, &buf, opts)

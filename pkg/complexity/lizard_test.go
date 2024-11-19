@@ -1,12 +1,67 @@
-package read
+package complexity
 
 import (
+	"github.com/stretchr/testify/assert"
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
+
+func TestParseLizard(t *testing.T) {
+	lizard := &lizardXML{
+		Measures: []lizardMeasure{
+			{
+				Type: "File",
+				Items: []lizardItem{
+					{
+						Name:   "src/file1.cpp",
+						Values: []int{1, 2, 3, 4},
+					},
+				},
+			},
+			{
+				Type: "Function",
+				Items: []lizardItem{
+					{
+						Name:   "pkg::some_func(...) at src/file1.cpp:1",
+						Values: []int{1, 2, 3},
+					},
+					{
+						Name:   "pkg::sub_pkg::SomeFunc(...) at src/file1.cpp:3",
+						Values: []int{4, 5, 6},
+					},
+				},
+			},
+		},
+	}
+
+	got, err := ParseLizard(lizard)
+	assert.NoError(t, err)
+	assert.Len(t, got, 1) // One file with two functions
+
+	file := got[0]
+	assert.Equal(t, "src/file1.cpp", file.Path)
+	assert.Len(t, file.Functions, 2)
+
+	// Check functions using Contains
+	assert.Contains(t, file.Functions, FunctionStat{
+		Name:      "some_func",
+		Package:   []string{"pkg"},
+		Line:      1,
+		Length:    2,
+		File:      "src/file1.cpp",
+		Compexity: 3,
+	})
+
+	assert.Contains(t, file.Functions, FunctionStat{
+		Name:      "SomeFunc",
+		Package:   []string{"pkg", "sub_pkg"},
+		Line:      3,
+		Length:    5,
+		File:      "src/file1.cpp",
+		Compexity: 6,
+	})
+}
 
 func TestParseItem(t *testing.T) {
 	tests := []struct {
@@ -199,104 +254,5 @@ func TestReadLizardXML(t *testing.T) {
 	assert.Contains(t, got.Measures[idx].Items, lizardItem{
 		Name:   "path/to/src/file2.cpp",
 		Values: []int{5, 6, 7, 8},
-	})
-}
-
-func TestParseLizard(t *testing.T) {
-	lizard := &lizardXML{
-		Measures: []lizardMeasure{
-			{
-				Type: "File",
-				Items: []lizardItem{
-					{
-						Name:   "src/file1.cpp",
-						Values: []int{1, 2, 3, 4},
-					},
-				},
-			},
-			{
-				Type: "Function",
-				Items: []lizardItem{
-					{
-						Name:   "pkg::some_func(...) at src/file1.cpp:1",
-						Values: []int{1, 2, 3},
-					},
-					{
-						Name:   "pkg::sub_pkg::SomeFunc(...) at src/file1.cpp:3",
-						Values: []int{4, 5, 6},
-					},
-				},
-			},
-		},
-	}
-
-	got, err := ParseLizard(lizard)
-	assert.NoError(t, err)
-	assert.Len(t, got, 1) // One file with two functions
-
-	file := got[0]
-	assert.Equal(t, "src/file1.cpp", file.Path)
-	assert.Len(t, file.Functions, 2)
-
-	// Check functions using Contains
-	assert.Contains(t, file.Functions, FunctionStat{
-		Name:      "some_func",
-		Package:   []string{"pkg"},
-		Line:      1,
-		Length:    2,
-		File:      "src/file1.cpp",
-		Compexity: 3,
-	})
-
-	assert.Contains(t, file.Functions, FunctionStat{
-		Name:      "SomeFunc",
-		Package:   []string{"pkg", "sub_pkg"},
-		Line:      3,
-		Length:    5,
-		File:      "src/file1.cpp",
-		Compexity: 6,
-	})
-}
-
-func TestReadChurn(t *testing.T) {
-	jsonData := `{
-        "files": [
-            {
-                "path": "src/file1.cpp",
-                "changes": 150,
-                "additions": 100,
-                "deletions": 50,
-                "commits": 10
-            },
-            {
-                "path": "path/to/src/file2.cpp",
-                "changes": 75,
-                "additions": 45,
-                "deletions": 30,
-                "commits": 5
-            }
-        ]
-    }`
-
-	reader := strings.NewReader(jsonData)
-	got, err := ReadChurn(reader)
-
-	assert.NoError(t, err)
-	assert.Len(t, got, 2)
-
-	assert.Contains(t, got, &ChurnChunk{
-		File:    "src/file1.cpp",
-		Churn:   150,
-		Added:   100,
-		Removed: 50,
-		Commits: 10,
-	})
-
-	assert.Contains(t, got, &ChurnChunk{
-		File:    "path/to/src/file2.cpp",
-		Churn:   75,
-		Added:   45,
-		Removed: 30,
-		Commits: 5,
 	})
 }
