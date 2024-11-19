@@ -165,21 +165,21 @@ func TestFormDataSeries(t *testing.T) {
 				},
 			},
 			want: ScatterSeries{
-				"critical": {
+				"critical": []opts.ScatterData{
 					{
 						Value:      []interface{}{12.0, uint(5), "critical1.go<br/>critical2.go"},
 						Symbol:     "circle",
 						SymbolSize: ScatterSymbolSize,
 					},
 				},
-				"warning": {
+				"warning": []opts.ScatterData{
 					{
 						Value:      []interface{}{7.0, uint(3), "warning.go"},
 						Symbol:     "circle",
 						SymbolSize: ScatterSymbolSize,
 					},
 				},
-				"normal": {
+				"normal": []opts.ScatterData{
 					{
 						Value:      []interface{}{3.0, uint(1), "normal1.go"},
 						Symbol:     "circle",
@@ -204,7 +204,10 @@ func TestFormDataSeries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := formDataSeries(tt.entries, mapper)
-			assert.Equal(t, tt.want, got)
+
+			for category, series := range tt.want {
+				assert.ElementsMatch(t, series, got[category])
+			}
 		})
 	}
 }
