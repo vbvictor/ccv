@@ -3,10 +3,9 @@ package git
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/vbvictor/ccv/pkg/complexity"
 	"io"
 	"strings"
-
-	"github.com/vbvictor/ccv/pkg/read"
 )
 
 // OutputType represents the type of output to be generated of churn subcommand
@@ -18,7 +17,7 @@ var (
 	OutputFormats            = []OutputType{JSON, Tabular}
 )
 
-func printStats(results []*read.ChurnChunk, out io.Writer, opts ChurnOptions) error {
+func printStats(results []*complexity.ChurnChunk, out io.Writer, opts ChurnOptions) error {
 	switch opts.OutputFormat {
 	case JSON:
 		printJSON(results, out, opts)
@@ -31,7 +30,7 @@ func printStats(results []*read.ChurnChunk, out io.Writer, opts ChurnOptions) er
 	return nil
 }
 
-func printTable(results []*read.ChurnChunk, out io.Writer, opts ChurnOptions) {
+func printTable(results []*complexity.ChurnChunk, out io.Writer, opts ChurnOptions) {
 	fmt.Fprintf(out, "\nTop %d most modified files (by %s):\n", opts.Top, opts.SortBy)
 	fmt.Fprintln(out, strings.Repeat("-", 100))
 	fmt.Fprintf(out, "%-8s %-8s %-8s %-8s %s\n", "CHANGES", "ADDED", "DELETED", "COMMITS", "FILEPATH")
@@ -47,7 +46,7 @@ func printTable(results []*read.ChurnChunk, out io.Writer, opts ChurnOptions) {
 	}
 }
 
-func printJSON(results []*read.ChurnChunk, out io.Writer, opts ChurnOptions) {
+func printJSON(results []*complexity.ChurnChunk, out io.Writer, opts ChurnOptions) {
 	output := struct {
 		Metadata struct {
 			TotalFiles int    `json:"total_files"`
@@ -62,7 +61,7 @@ func printJSON(results []*read.ChurnChunk, out io.Writer, opts ChurnOptions) {
 				} `json:"date_range"`
 			} `json:"filters"`
 		} `json:"metadata"`
-		Files []*read.ChurnChunk `json:"files"`
+		Files []*complexity.ChurnChunk `json:"files"`
 	}{
 		Files: results,
 	}

@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"github.com/vbvictor/ccv/pkg/complexity"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"github.com/vbvictor/ccv/pkg/read"
 	"golang.org/x/exp/maps"
 )
 
@@ -82,13 +82,13 @@ func PrintRepoStats(repoPath string) error {
 	return printStats(churns, os.Stdout, ChurnOpts)
 }
 
-func MostChurnFiles(repoPath string) ([]*read.ChurnChunk, error) {
+func MostChurnFiles(repoPath string) ([]*complexity.ChurnChunk, error) {
 	return ReadChurn(repoPath, ChurnOpts)
 }
 
-func ReadChurn(repoPath string, opts ChurnOptions) ([]*read.ChurnChunk, error) {
+func ReadChurn(repoPath string, opts ChurnOptions) ([]*complexity.ChurnChunk, error) {
 	cmd := []string{"git", "log", "--pretty=format:%H", "--numstat"}
-	
+
 	if opts.CommitCount > 0 {
 		cmd = append(cmd, fmt.Sprintf("-n%d", opts.CommitCount))
 	}
@@ -110,9 +110,9 @@ func ReadChurn(repoPath string, opts ChurnOptions) ([]*read.ChurnChunk, error) {
 		return nil, fmt.Errorf("failed to execute git command: %v", err)
 	}
 
-	fileStats := make(map[string]*read.ChurnChunk)
+	fileStats := make(map[string]*complexity.ChurnChunk)
 	lines := strings.Split(string(output), "\n")
-	
+
 	currentCommit := ""
 	modifiedInCommit := make(map[string]bool)
 
@@ -144,7 +144,7 @@ func ReadChurn(repoPath string, opts ChurnOptions) ([]*read.ChurnChunk, error) {
 				}
 
 				if _, exists := fileStats[filepath]; !exists {
-					fileStats[filepath] = &read.ChurnChunk{File: filepath}
+					fileStats[filepath] = &complexity.ChurnChunk{File: filepath}
 				}
 
 				fileStats[filepath].Added += uint(additions)
@@ -189,7 +189,7 @@ func shouldSkipFile(file, excludePath, extensions string) bool {
 	return false
 }
 
-func sortAndLimit(result []*read.ChurnChunk, sortBy SortType, limit int) []*read.ChurnChunk {
+func sortAndLimit(result []*complexity.ChurnChunk, sortBy SortType, limit int) []*complexity.ChurnChunk {
 	less := func() func(i, j int) bool {
 		switch sortBy {
 		case Changes:

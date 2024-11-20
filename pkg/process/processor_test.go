@@ -1,34 +1,33 @@
 package process
 
 import (
+	"github.com/vbvictor/ccv/pkg/complexity"
 	"testing"
 
-	"github.com/vbvictor/ccv/pkg/plot"
-	"github.com/vbvictor/ccv/pkg/read"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/vbvictor/ccv/pkg/plot"
 )
 
 func TestComplexityFilter_Filter(t *testing.T) {
-	files := read.FilesStat{
-		&read.FileStat{
+	files := complexity.FilesStat{
+		&complexity.FileStat{
 			Path: "file1.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func1", Compexity: 5},
 				{Name: "func2", Compexity: 10},
 				{Name: "func3", Compexity: 15},
 			},
 		},
-		&read.FileStat{
+		&complexity.FileStat{
 			Path: "file2.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func4", Compexity: 3},
 				{Name: "func5", Compexity: 7},
 			},
 		},
-		&read.FileStat{
+		&complexity.FileStat{
 			Path: "file3.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func6", Compexity: 2},
 			},
 		},
@@ -81,10 +80,10 @@ func TestComplexityFilter_Filter(t *testing.T) {
 }
 
 func TestApplyFilters(t *testing.T) {
-	files := read.FilesStat{
-		&read.FileStat{
+	files := complexity.FilesStat{
+		&complexity.FileStat{
 			Path: "file1.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func1", Compexity: 5},
 				{Name: "func2", Compexity: 10},
 				{Name: "func3", Compexity: 15},
@@ -123,25 +122,25 @@ func TestApplyFilters(t *testing.T) {
 }
 
 func TestAvgComplexity(t *testing.T) {
-	files := read.FilesStat{
-		&read.FileStat{
+	files := complexity.FilesStat{
+		&complexity.FileStat{
 			Path: "file1.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func1", Compexity: 5},
 				{Name: "func2", Compexity: 10},
 				{Name: "func3", Compexity: 15},
 			},
 		},
-		&read.FileStat{
+		&complexity.FileStat{
 			Path: "file2.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func4", Compexity: 20},
 				{Name: "func5", Compexity: 40},
 			},
 		},
-		&read.FileStat{
+		&complexity.FileStat{
 			Path:      "empty.go",
-			Functions: []read.FunctionStat{},
+			Functions: []complexity.FunctionStat{},
 		},
 	}
 
@@ -161,31 +160,31 @@ func TestAvgComplexity(t *testing.T) {
 }
 
 func TestPreparePlotData(t *testing.T) {
-	files := read.FilesStat{
-		&read.FileStat{
+	files := complexity.FilesStat{
+		&complexity.FileStat{
 			Path: "file1.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func1", Compexity: 5},
 				{Name: "func2", Compexity: 10},
 				{Name: "func3", Compexity: 15},
 			},
 		},
-		&read.FileStat{
+		&complexity.FileStat{
 			Path: "file2.go",
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func4", Compexity: 20},
 				{Name: "func5", Compexity: 40},
 			},
 		},
-		&read.FileStat{
+		&complexity.FileStat{
 			Path: "file3.go", // Will be skipped - no churn data
-			Functions: []read.FunctionStat{
+			Functions: []complexity.FunctionStat{
 				{Name: "func6", Compexity: 25},
 			},
 		},
 	}
 
-	churns := []*read.ChurnChunk{
+	churns := []*complexity.ChurnChunk{
 		{
 			File:    "file1.go",
 			Churn:   100,
@@ -215,12 +214,12 @@ func TestPreparePlotData(t *testing.T) {
 	assert.Len(t, got, 2) // Only matching files should be included
 
 	assert.Contains(t, got, plot.ScatterEntry{
-		File:       "file1.go",
+		File:        "file1.go",
 		ScatterData: plot.ScatterData{Complexity: 10, Churn: 100}, // (5 + 10 + 15) / 3
 	})
 
 	assert.Contains(t, got, plot.ScatterEntry{
-		File:       "file2.go",
+		File:        "file2.go",
 		ScatterData: plot.ScatterData{Complexity: 30, Churn: 50}, // (20 + 40) / 2
 	})
 }

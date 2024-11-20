@@ -1,15 +1,15 @@
 package git
 
 import (
+	"github.com/vbvictor/ccv/pkg/complexity"
 	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vbvictor/ccv/pkg/read"
 )
 
-var testData = []*read.ChurnChunk{
+var testData = []*complexity.ChurnChunk{
 	{File: "file1.go", Churn: 100, Added: 60, Removed: 40, Commits: 5},
 	{File: "file2.go", Churn: 200, Added: 150, Removed: 50, Commits: 3},
 	{File: "file3.go", Churn: 150, Added: 70, Removed: 80, Commits: 8},
@@ -50,7 +50,7 @@ func TestSortAndLimitTypes(t *testing.T) {
 
 			actual := extractFileNames(result)
 			assert.Equal(t, tt.expected, actual)
-			assertSorted(t, result, func(cc *read.ChurnChunk) any {
+			assertSorted(t, result, func(cc *complexity.ChurnChunk) any {
 				switch tt.sortBy {
 				case Changes:
 					return cc.Churn
@@ -97,7 +97,7 @@ func TestSortAndLimitLimits(t *testing.T) {
 
 			actual := extractFileNames(result)
 			assert.Equal(t, tt.expected, actual)
-			assertSorted(t, result, func(cc *read.ChurnChunk) any { return cc.Commits })
+			assertSorted(t, result, func(cc *complexity.ChurnChunk) any { return cc.Commits })
 		})
 	}
 }
@@ -105,24 +105,24 @@ func TestSortAndLimitLimits(t *testing.T) {
 func TestSortAndLimitFiles(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    []*read.ChurnChunk
+		input    []*complexity.ChurnChunk
 		expected []string
 	}{
 		{
 			name:     "empty input",
-			input:    []*read.ChurnChunk{},
+			input:    []*complexity.ChurnChunk{},
 			expected: []string{},
 		},
 		{
 			name: "single file",
-			input: []*read.ChurnChunk{
+			input: []*complexity.ChurnChunk{
 				{File: "single.go", Commits: 1},
 			},
 			expected: []string{"single.go"},
 		},
 		{
 			name: "multiple identical values",
-			input: []*read.ChurnChunk{
+			input: []*complexity.ChurnChunk{
 				{File: "file1.go", Commits: 5},
 				{File: "file2.go", Commits: 10},
 				{File: "file3.go", Commits: 7},
@@ -137,12 +137,12 @@ func TestSortAndLimitFiles(t *testing.T) {
 
 			actual := extractFileNames(result)
 			assert.Equal(t, tt.expected, actual)
-			assertSorted(t, result, func(cc *read.ChurnChunk) any { return cc.Commits })
+			assertSorted(t, result, func(cc *complexity.ChurnChunk) any { return cc.Commits })
 		})
 	}
 }
 
-func extractFileNames(chunks []*read.ChurnChunk) []string {
+func extractFileNames(chunks []*complexity.ChurnChunk) []string {
 	names := make([]string, len(chunks))
 	for i, chunk := range chunks {
 		names[i] = chunk.File
@@ -150,7 +150,7 @@ func extractFileNames(chunks []*read.ChurnChunk) []string {
 	return names
 }
 
-func assertSorted(t *testing.T, result []*read.ChurnChunk, ext func(*read.ChurnChunk) any) {
+func assertSorted(t *testing.T, result []*complexity.ChurnChunk, ext func(*complexity.ChurnChunk) any) {
 	for i := 1; i < len(result); i++ {
 		assert.GreaterOrEqual(t, ext(result[i-1]), ext(result[i]))
 	}
@@ -166,13 +166,13 @@ func TestMostModifiedFiles(t *testing.T) {
 		name     string
 		sortBy   SortType
 		top      int
-		expected []*read.ChurnChunk
+		expected []*complexity.ChurnChunk
 	}{
 		{
 			name:   "sort by changes top 2",
 			sortBy: Changes,
 			top:    2,
-			expected: []*read.ChurnChunk{
+			expected: []*complexity.ChurnChunk{
 				{File: "main.cpp", Added: 15, Removed: 8, Churn: 23, Commits: 4},
 				{File: "main.go", Added: 7, Removed: 0, Churn: 7, Commits: 1},
 			},
@@ -181,7 +181,7 @@ func TestMostModifiedFiles(t *testing.T) {
 			name:   "sort by additions",
 			sortBy: Additions,
 			top:    2,
-			expected: []*read.ChurnChunk{
+			expected: []*complexity.ChurnChunk{
 				{File: "main.cpp", Added: 15, Removed: 8, Churn: 23, Commits: 4},
 				{File: "main.go", Added: 7, Removed: 0, Churn: 7, Commits: 1},
 			},
@@ -190,7 +190,7 @@ func TestMostModifiedFiles(t *testing.T) {
 			name:   "sort by deletions",
 			sortBy: Deletions,
 			top:    1,
-			expected: []*read.ChurnChunk{
+			expected: []*complexity.ChurnChunk{
 				{File: "main.cpp", Added: 15, Removed: 8, Churn: 23, Commits: 4},
 			},
 		},
@@ -198,7 +198,7 @@ func TestMostModifiedFiles(t *testing.T) {
 			name:   "sort by commits",
 			sortBy: Commits,
 			top:    1,
-			expected: []*read.ChurnChunk{
+			expected: []*complexity.ChurnChunk{
 				{File: "main.cpp", Added: 15, Removed: 8, Churn: 23, Commits: 4},
 			},
 		},

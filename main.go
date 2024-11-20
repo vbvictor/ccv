@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vbvictor/ccv/pkg/complexity"
+
+	"github.com/spf13/cobra"
 	"github.com/vbvictor/ccv/pkg/git"
 	"github.com/vbvictor/ccv/pkg/plot"
 	"github.com/vbvictor/ccv/pkg/process"
-	"github.com/vbvictor/ccv/pkg/read"
-
-	"github.com/spf13/cobra"
 )
 
 // File to store the output graph
@@ -39,7 +39,7 @@ func main() {
 			}
 			defer cf.Close()
 
-			churns, err := read.ReadChurn(cf)
+			churns, err := complexity.ReadChurn(cf)
 			if err != nil {
 				return fmt.Errorf("error reading churn data: %w", err)
 			}
@@ -51,12 +51,12 @@ func main() {
 			}
 			defer xf.Close()
 
-			lizard, err := read.ReadLizardXML(xf)
+			lizard, err := complexity.ReadLizardXML(xf)
 			if err != nil {
 				return fmt.Errorf("Error reading complexity data: %w\n", err)
 			}
 
-			files, err := read.ParseLizard(lizard)
+			files, err := complexity.ParseLizard(lizard)
 			if err != nil {
 				return fmt.Errorf("Error parsing complexity data: %w\n", err)
 			}
@@ -88,13 +88,13 @@ func main() {
 	flags.UintVar(&plot.HighRisk, "high-risk", 25, "High Risk threshold")
 	flags.UintVar(&plot.VeryHighRisk, "very-high-risk", 30, "Very High Risk threshold")
 	flags.UintVar(&plot.CriticalRisk, "critical-risk", 35, "Critical Risk threshold")
-  
+
 	var cmdChurn = &cobra.Command{
-    Use:   "churn <repository>",
+		Use:   "churn <repository>",
 		Short: "Get churn metrics of a repository",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repoPath, err:= filepath.Abs(args[0])
+			repoPath, err := filepath.Abs(args[0])
 			if err != nil {
 				return fmt.Errorf("error getting absolute path: %w", err)
 			}
@@ -102,27 +102,57 @@ func main() {
 			if process.Verbose {
 				fmt.Printf("Processing repository: %s\n", repoPath)
 			}
-			
+
 			return git.PrintRepoStats(repoPath)
 		},
 	}
-  
-  flags = cmdChurn.PersistentFlags()
-  flags.IntVar(&git.ChurnOpts.CommitCount, "commits", 0, "Number of commits to analyze")
-  flags.StringVar(&git.ChurnOpts.SortBy, "sort", "changes", fmt.Sprintf("Sort by: %s, %s, %s, %s", git.Changes, git.Additions, git.Deletions, git.Commits))
-  flags.IntVar(&git.ChurnOpts.Top, "top", 10, "Number of top files to display")
-  flags.BoolVar(&process.Verbose, "verbose", false, "Show detailed progress")
-  flags.StringVar(&git.ChurnOpts.ExcludePath, "exclude", "", "Exclude files matching regex pattern")
-  flags.StringVar(&git.ChurnOpts.Extensions, "ext", "", "Only include files with extensions in comma-separated list. For example h,hpp,c,cpp")
-  flags.Var(&git.ChurnOpts.Since, "since", "Start date for analysis (YYYY-MM-DD)")
-  flags.Var(&git.ChurnOpts.Until, "until", "End date for analysis (YYYY-MM-DD)")
+
+	flags = cmdChurn.PersistentFlags()
+	flags.IntVar(&git.ChurnOpts.CommitCount, "commits", 0, "Number of commits to analyze")
+	flags.StringVar(&git.ChurnOpts.SortBy, "sort", "changes", fmt.Sprintf("Sort by: %s, %s, %s, %s", git.Changes, git.Additions, git.Deletions, git.Commits))
+	flags.IntVar(&git.ChurnOpts.Top, "top", 10, "Number of top files to display")
+	flags.BoolVar(&process.Verbose, "verbose", false, "Show detailed progress")
+	flags.StringVar(&git.ChurnOpts.ExcludePath, "exclude", "", "Exclude files matching regex pattern")
+	flags.StringVar(&git.ChurnOpts.Extensions, "ext", "", "Only include files with extensions in comma-separated list. For example h,hpp,c,cpp")
+	flags.Var(&git.ChurnOpts.Since, "since", "Start date for analysis (YYYY-MM-DD)")
+	flags.Var(&git.ChurnOpts.Until, "until", "End date for analysis (YYYY-MM-DD)")
 	flags.StringVar(&git.ChurnOpts.OutputFormat, "format", git.Tabular, fmt.Sprintf("Output format %v", git.OutputFormats))
 
 	cmdChurn.Flag("since").DefValue = "none"
 	cmdChurn.Flag("until").DefValue = "none"
 
+
+	var cmdComplexity = &cobra.Command{
+		Use:   "complexity <path>",
+		Short: "Get complexity metrics of a repository",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := filepath.Abs(args[0])
+			if err != nil {
+				return fmt.Errorf("error getting absolute path: %w", err)
+			}
+
+			if process.Verbose {
+				fmt.Printf("Processing repository: %s\n", path)
+			}
+
+			fileStat, err := complexity.RunLizardCmd(path, complexity.ComplexityOpts)
+			if err != nil {
+				return fmt.Errorf("error running lizard command: %w", err)
+			}
+
+			complexity.PrintTabular(fileStat, os.Stdout)
+			
+			return nil
+		},
+	}
+
+	flags = cmdComplexity.PersistentFlags()
+	flags.StringVar(&complexity.ComplexityOpts.Extensions, "languages", "", "Only include files with given languages in comma-separated list. For example cpp,python")
+	flags.IntVar(&complexity.ComplexityOpts.Threads, "t", 1, "Number of threads to run")
+
 	var rootCmd = &cobra.Command{Use: "ccv"}
-	rootCmd.AddCommand(cmdPlot, cmdChurn)
+	rootCmd.AddCommand(cmdPlot, cmdChurn, cmdComplexity)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

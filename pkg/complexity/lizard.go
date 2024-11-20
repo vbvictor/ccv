@@ -1,33 +1,32 @@
-package read
+package complexity
 
 import (
-	"encoding/json"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 )
 
-type FileStat struct {
-	Path      string
-	Functions FunctionsStat
+type Engine = string
+
+var (
+	Lizard Engine = "lizard"
+)
+
+type ComplexityOptions struct {
+	Extensions string
+	Threads    int
 }
 
-type FilesStat = []*FileStat
-
-type FunctionStat struct {
-	File      string
-	Package   []string
-	Name      string
-	Line      uint
-	Length    uint
-	Compexity uint
+var ComplexityOpts = ComplexityOptions{
+	Extensions: "",
+	Threads: 1,
 }
-
-type FunctionsStat = []FunctionStat
 
 type lizardItem struct {
 	Name   string `xml:"name,attr"`
@@ -52,7 +51,39 @@ type lizardXML struct {
 	Measures []lizardMeasure `xml:"measure"`
 }
 
-var re = regexp.MustCompile(`(.*?)\s+at\s+(.*?):(\d+)`)
+var lizardFileRe = regexp.MustCompile(`(.*?)\s+at\s+(.*?):(\d+)`)
+
+func RunLizardCmd(repoPath string, opts ComplexityOptions) (FilesStat, error) {
+	_, err := exec.LookPath("lizard")
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := []string{"lizard", "-s", "cyclomatic_complexity", "-m", "-X", "-t", strconv.Itoa(opts.Threads)}
+
+	if opts.Extensions != "" {
+		// Walk filepath to be sure such files exist
+		// If no files exist print that no files and return empty FilesStat
+		allowedExts := strings.Split(opts.Extensions, ",")
+		for _, ext := range allowedExts {
+			cmd = append(cmd, "-l", ext)
+		}
+	}
+
+	cmd = append(cmd, repoPath)
+	lizardCmd := exec.Command(cmd[0], cmd[1:]...)
+	output, err := lizardCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run lizard: %w", err)
+	}
+
+	lizard, err := ReadLizardXML(bytes.NewReader(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse lizard output: %w", err)
+	}
+
+	return ParseLizard(lizard)
+}
 
 func parseItem(item lizardItem) (FunctionStat, error) {
 	re := regexp.MustCompile(`(.*?)\s+at\s+(.*?):(\d+)`)
@@ -123,25 +154,4 @@ func ParseLizard(lizard *lizardXML) (FilesStat, error) {
 	}
 
 	return result, nil
-}
-
-type ChurnChunk struct {
-	File    string `json:"path"`
-	Churn   uint   `json:"changes"`
-	Added   uint   `json:"additions"`
-	Removed uint   `json:"deletions"`
-	Commits uint   `json:"commits"`
-}
-
-type churnJSON struct {
-	Files []*ChurnChunk `json:"files"`
-}
-
-func ReadChurn(r io.Reader) ([]*ChurnChunk, error) {
-	var data churnJSON
-	if err := json.NewDecoder(r).Decode(&data); err != nil {
-		return nil, err
-	}
-
-	return data.Files, nil
 }
