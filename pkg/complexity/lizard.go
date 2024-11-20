@@ -54,6 +54,11 @@ type lizardXML struct {
 var lizardFileRe = regexp.MustCompile(`(.*?)\s+at\s+(.*?):(\d+)`)
 
 func RunLizardCmd(repoPath string, opts ComplexityOptions) (FilesStat, error) {
+	_, err := exec.LookPath("lizard")
+	if err != nil {
+		return nil, err
+	}
+
 	cmd := []string{"lizard", "-s", "cyclomatic_complexity", "-m", "-X", "-t", strconv.Itoa(opts.Threads)}
 
 	if opts.Extensions != "" {

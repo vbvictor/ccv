@@ -1,10 +1,11 @@
 package complexity
 
 import (
-	"github.com/stretchr/testify/assert"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseLizard(t *testing.T) {
@@ -255,4 +256,60 @@ func TestReadLizardXML(t *testing.T) {
 		Name:   "path/to/src/file2.cpp",
 		Values: []int{5, 6, 7, 8},
 	})
+}
+
+func TestRunLizardCmd(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		extension     string
+		expectedFuncs map[string]uint
+		mainFileName  string
+	}{
+		{
+			name:       "calculate complexity from cpp files",
+			extension: "cpp",
+			expectedFuncs: map[string]uint{
+				"processNumber":           4,
+				"validateAndProcessInput": 6,
+			},
+			mainFileName: "main.cpp",
+		},
+		{
+			name:       "calculate complexity from go files",
+			extension: "go",
+			expectedFuncs: map[string]uint{
+				"ProcessData":     3,
+				"ValidateInput":   4,
+			},
+			mainFileName: "main.go",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := RunLizardCmd("../../test/complexity/lizard", ComplexityOptions{
+				Extensions: tt.extension,
+				Threads:    1,
+			})
+
+			assert.NoError(t, err)
+			assert.NotEmpty(t, results)
+
+			var mainFile *FileStat
+			for _, file := range results {
+				if strings.HasSuffix(file.Path, tt.mainFileName) {
+					mainFile = file
+					break
+				}
+			}
+
+			assert.NotNil(t, mainFile, "%s should be analyzed", tt.mainFileName)
+
+			for _, fn := range mainFile.Functions {
+				expectedComplexity, exists := tt.expectedFuncs[fn.Name]
+				if exists {
+					assert.Equal(t, expectedComplexity, fn.Compexity,
+						"Function %s should have complexity %d", fn.Name, expectedComplexity)
+				}
+			}
+		})
+	}
 }
