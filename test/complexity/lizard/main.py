@@ -1,29 +1,27 @@
 def calculate_grade(score):  # Cyclomatic Complexity = 4
-    # One path for initial entry
-    if score >= 90:  # +1 for if condition
+    if score >= 90:
         return 'A'
-    elif score >= 80:  # +1 for elif condition
+    elif score >= 80:
         return 'B'
-    elif score >= 70:  # +1 for elif condition
+    elif score >= 70:
         return 'C'
-    else:  # +1 for else condition
+    else:
         return 'F'
 
-def is_valid_password(password):  # Cyclomatic Complexity = 5
-    # One path for initial entry
-    if len(password) < 8:  # +1 for if condition
+def is_valid_password(password):  # Cyclomatic Complexity = 8
+    if len(password) < 8:
         return False
     
     has_upper = False
     has_lower = False
     has_digit = False
     
-    for char in password:  # +1 for loop
-        if char.isupper():  # +1 for if condition
+    for char in password:
+        if char.isupper():
             has_upper = True
-        elif char.islower():  # +1 for elif condition
+        elif char.islower():
             has_lower = True
-        elif char.isdigit():  # +1 for elif condition
+        elif char.isdigit():
             has_digit = True
             
     return has_upper and has_lower and has_digit

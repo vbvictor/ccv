@@ -148,7 +148,7 @@ func main() {
 	}
 
 	flags = cmdComplexity.PersistentFlags()
-	flags.StringVar(&complexity.ComplexityOpts.Extensions, "ext", "", "Only include files with extensions in comma-separated list. For example h,hpp,c,cpp")
+	flags.StringVar(&complexity.ComplexityOpts.Extensions, "languages", "", "Only include files with given languages in comma-separated list. For example cpp,python")
 	flags.IntVar(&complexity.ComplexityOpts.Threads, "t", 1, "Number of threads to run")
 
 	var rootCmd = &cobra.Command{Use: "ccv"}

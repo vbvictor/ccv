@@ -261,32 +261,32 @@ func TestReadLizardXML(t *testing.T) {
 func TestRunLizardCmd(t *testing.T) {
 	for _, tt := range []struct {
 		name           string
-		extension     string
+		lang     string
 		expectedFuncs map[string]uint
-		mainFileName  string
+		filename  string
 	}{
 		{
 			name:       "calculate complexity from cpp files",
-			extension: "cpp",
+			lang: "cpp",
 			expectedFuncs: map[string]uint{
 				"processNumber":           4,
 				"validateAndProcessInput": 6,
 			},
-			mainFileName: "main.cpp",
+			filename: "main.cpp",
 		},
 		{
-			name:       "calculate complexity from go files",
-			extension: "go",
+			name:       "calculate complexity from py files",
+			lang: "python",
 			expectedFuncs: map[string]uint{
-				"ProcessData":     3,
-				"ValidateInput":   4,
+				"calculate_grade":     4,
+				"is_valid_password":   8,
 			},
-			mainFileName: "main.go",
+			filename: "main.py",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			results, err := RunLizardCmd("../../test/complexity/lizard", ComplexityOptions{
-				Extensions: tt.extension,
+				Extensions: tt.lang,
 				Threads:    1,
 			})
 
@@ -295,13 +295,13 @@ func TestRunLizardCmd(t *testing.T) {
 
 			var mainFile *FileStat
 			for _, file := range results {
-				if strings.HasSuffix(file.Path, tt.mainFileName) {
+				if strings.HasSuffix(file.Path, tt.filename) {
 					mainFile = file
 					break
 				}
 			}
 
-			assert.NotNil(t, mainFile, "%s should be analyzed", tt.mainFileName)
+			assert.NotNil(t, mainFile, "%s should be analyzed", tt.filename)
 
 			for _, fn := range mainFile.Functions {
 				expectedComplexity, exists := tt.expectedFuncs[fn.Name]
