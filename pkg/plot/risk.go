@@ -38,7 +38,6 @@ func ValidateRiskThresholds() error {
 	return nil
 }
 
-
 func getRiskLevels() []RiskLevel {
 	return []RiskLevel{
 		{Name: "Very Low Risk", Color: "#90EE90", Min: VeryLowRisk, Max: LowRisk - 1},
@@ -70,26 +69,27 @@ func NewRisksMapper() *RisksMapper {
 }
 
 var _ EntryMapper = (*RisksMapper)(nil)
-	func (rm *RisksMapper) Map(data ScatterData) Category {
-		riskScore := data.Complexity + float64(data.Churn)
-	
-		for _, level := range rm.levels {
-			if riskScore >= float64(level.Min) && riskScore <= float64(level.Max) {
-				return level.Name
-			}
+
+func (rm *RisksMapper) Map(data ScatterData) Category {
+	riskScore := data.Complexity + float64(data.Churn)
+
+	for _, level := range rm.levels {
+		if riskScore >= float64(level.Min) && riskScore <= float64(level.Max) {
+			return level.Name
 		}
-	
-		return "Unknown"
 	}
 
-	func (rm *RisksMapper) Style(category Category) opts.ItemStyle {
-		for _, level := range rm.levels {
-			if level.Name == category {
-				return opts.ItemStyle{
-					Color: level.Color,
-				}
+	return "Unknown"
+}
+
+func (rm *RisksMapper) Style(category Category) opts.ItemStyle {
+	for _, level := range rm.levels {
+		if level.Name == category {
+			return opts.ItemStyle{
+				Color: level.Color,
 			}
 		}
-	
-		return opts.ItemStyle{}
 	}
+
+	return opts.ItemStyle{}
+}

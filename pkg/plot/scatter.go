@@ -2,6 +2,7 @@ package plot
 
 import (
 	"fmt"
+	"github.com/vbvictor/ccv/pkg/complexity"
 	"os"
 	"strings"
 
@@ -144,3 +145,52 @@ func CreateScatterChart(entries []ScatterEntry, mapper EntryMapper, outputPath s
 
 	return scatter.Render(f)
 }
+
+// Skip file if it is not found in chunk or files, first goes over all churns
+// Matches based on filename
+func PreparePlotData(files complexity.FilesStat, churns []*complexity.ChurnChunk) []ScatterEntry {
+	result := make([]ScatterEntry, 0)
+
+	fileComplexities := complexity.AvgComplexity(files)
+
+	// Create map for quick churn lookup
+	churnMap := make(map[string]*complexity.ChurnChunk)
+	for _, churn := range churns {
+		churnMap[churn.File] = churn
+	}
+
+	// Match files with churns and create chart entries
+	for _, fc := range fileComplexities {
+		churn, exists := churnMap[fc.File]
+		if !exists {
+			continue
+		}
+
+		entry := ScatterEntry{
+			File:        fc.File,
+			ScatterData: ScatterData{Complexity: fc.Complexity, Churn: 0},
+		}
+
+		switch Plot {
+		case Commits:
+			entry.Churn = churn.Commits
+		case Changes:
+			entry.Churn = churn.Churn
+		default:
+			panic("Unknown plot type")
+		}
+
+		result = append(result, entry)
+	}
+
+	return result
+}
+
+type PlotType = string
+
+const (
+	Commits PlotType = "commits"
+	Changes PlotType = "changes"
+)
+
+var Plot = Commits

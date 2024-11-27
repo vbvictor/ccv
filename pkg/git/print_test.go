@@ -2,9 +2,10 @@ package git
 
 import (
 	"bytes"
-	"github.com/vbvictor/ccv/pkg/complexity"
 	"testing"
 	"time"
+
+	"github.com/vbvictor/ccv/pkg/complexity"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -67,7 +68,7 @@ func TestPrintJSON(t *testing.T) {
 		SortBy:      "churn",
 		Path:        "src/",
 		ExcludePath: "vendor/",
-		Extensions:  ".go,.ts",
+		Extensions:  map[string]struct{}{"go": {}},
 		Since:       Date{since},
 		Until:       Date{until},
 	}
@@ -81,7 +82,7 @@ func TestPrintJSON(t *testing.T) {
     "filters": {
       "path": "src/",
       "exclude_pattern": "vendor/",
-      "extensions": ".go,.ts",
+      "extensions": "go",
       "date_range": {
         "since": "2024-01-01",
         "until": "2024-01-31"

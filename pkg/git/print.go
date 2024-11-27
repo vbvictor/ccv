@@ -3,9 +3,11 @@ package git
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/vbvictor/ccv/pkg/complexity"
 	"io"
 	"strings"
+
+	"github.com/vbvictor/ccv/pkg/complexity"
+	"golang.org/x/exp/maps"
 )
 
 // OutputType represents the type of output to be generated of churn subcommand
@@ -30,6 +32,7 @@ func printStats(results []*complexity.ChurnChunk, out io.Writer, opts ChurnOptio
 	return nil
 }
 
+// TODO rewrite using new tabulate formatter
 func printTable(results []*complexity.ChurnChunk, out io.Writer, opts ChurnOptions) {
 	fmt.Fprintf(out, "\nTop %d most modified files (by %s):\n", opts.Top, opts.SortBy)
 	fmt.Fprintln(out, strings.Repeat("-", 100))
@@ -70,7 +73,7 @@ func printJSON(results []*complexity.ChurnChunk, out io.Writer, opts ChurnOption
 	output.Metadata.SortBy = opts.SortBy
 	output.Metadata.Filters.Path = opts.Path
 	output.Metadata.Filters.ExcludePattern = opts.ExcludePath
-	output.Metadata.Filters.Extensions = opts.Extensions
+	output.Metadata.Filters.Extensions = strings.Join(maps.Keys(opts.Extensions), ",")
 	output.Metadata.Filters.DateRange.Since = opts.Since.String()
 	output.Metadata.Filters.DateRange.Until = opts.Until.String()
 

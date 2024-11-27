@@ -5,7 +5,7 @@ type FileStat struct {
 	Functions FunctionsStat
 }
 
-type FilesStat = []*FileStat
+type FilesStat = []FileStat
 
 type FunctionStat struct {
 	File      string
@@ -24,4 +24,9 @@ type ChurnChunk struct {
 	Added   uint   `json:"additions"`
 	Removed uint   `json:"deletions"`
 	Commits uint   `json:"commits"`
+}
+
+type FileComplexity struct {
+	File       string
+	Complexity float64
 }

@@ -1,9 +1,10 @@
 package git
 
 import (
-	"github.com/vbvictor/ccv/pkg/complexity"
 	"os/exec"
 	"testing"
+
+	"github.com/vbvictor/ccv/pkg/complexity"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -157,7 +158,7 @@ func assertSorted(t *testing.T, result []*complexity.ChurnChunk, ext func(*compl
 }
 
 // TODO: add more data to bundle
-func TestMostModifiedFiles(t *testing.T) {
+func TestReadChurn(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	Unbundle(t, "../../test/bundles/churn-test.bundle", tmpDir)
@@ -204,7 +205,7 @@ func TestMostModifiedFiles(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := ReadChurn(tmpDir, ChurnOptions{SortBy: tt.sortBy, Top: tt.top})
+			results, err := ReadGitChurn(tmpDir, ChurnOptions{SortBy: tt.sortBy, Top: tt.top})
 			assert.NoError(t, err)
 			assert.Len(t, results, len(tt.expected))
 
@@ -224,4 +225,75 @@ func Unbundle(t *testing.T, src, dst string) {
 
 	cmd := exec.Command("git", "clone", src, dst)
 	require.NoError(t, cmd.Run())
+}
+
+func TestShouldSkipFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		file     string
+		opts     ChurnOptions
+		expected bool
+	}{
+		{
+			name: "exclude pattern matches",
+			file: "vendor/some/pkg/file.go",
+			opts: ChurnOptions{
+				ExcludePath: "vendor/.*",
+			},
+			expected: true,
+		},
+		{
+			name: "exclude pattern does not match",
+			file: "src/pkg/file.go",
+			opts: ChurnOptions{
+				ExcludePath: "vendor/.*",
+			},
+			expected: false,
+		},
+		{
+			name: "extension matches allowed list",
+			file: "main.go",
+			opts: ChurnOptions{
+				Extensions: map[string]struct{}{
+					"go": {},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "extension not in allowed list",
+			file: "script.py",
+			opts: ChurnOptions{
+				Extensions: map[string]struct{}{
+					"go":  {},
+					"cpp": {},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "no filters applied",
+			file: "any/path/file.txt",
+			opts: ChurnOptions{},
+			expected: false,
+		},
+		{
+			name: "both filters applied - file matches both",
+			file: "src/main.go",
+			opts: ChurnOptions{
+				ExcludePath: "test/.*",
+				Extensions: map[string]struct{}{
+					"go": {},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := shouldSkipFile(tt.file, tt.opts)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

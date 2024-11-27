@@ -1,6 +1,8 @@
 package complexity
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -36,7 +38,7 @@ func TestParseLizard(t *testing.T) {
 		},
 	}
 
-	got, err := ParseLizard(lizard)
+	got, err := parseLizard(lizard)
 	assert.NoError(t, err)
 	assert.Len(t, got, 1) // One file with two functions
 
@@ -218,7 +220,7 @@ func TestReadLizardXML(t *testing.T) {
 </cppncss>`
 
 	reader := strings.NewReader(xmlData)
-	got, err := ReadLizardXML(reader)
+	got, err := readLizardXML(reader)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, got)
@@ -260,55 +262,90 @@ func TestReadLizardXML(t *testing.T) {
 
 func TestRunLizardCmd(t *testing.T) {
 	for _, tt := range []struct {
-		name           string
-		extension     string
+		name          string
+		language      string
 		expectedFuncs map[string]uint
-		mainFileName  string
+		file  string
 	}{
 		{
-			name:       "calculate complexity from cpp files",
-			extension: "cpp",
+			name:     "calculate complexity from cpp files",
+			language: "cpp",
 			expectedFuncs: map[string]uint{
 				"processNumber":           4,
 				"validateAndProcessInput": 6,
 			},
-			mainFileName: "main.cpp",
+			file: "main.cpp",
 		},
 		{
-			name:       "calculate complexity from go files",
-			extension: "go",
+			name:     "calculate complexity from go files",
+			language: "python",
 			expectedFuncs: map[string]uint{
-				"ProcessData":     3,
-				"ValidateInput":   4,
+				"calculate_grade":   4,
+				"is_valid_password": 8,
 			},
-			mainFileName: "main.go",
+			file: "main.py",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			results, err := RunLizardCmd("../../test/complexity/lizard", ComplexityOptions{
-				Extensions: tt.extension,
-				Threads:    1,
+			results, err := RunLizardCmd("../../test/complexity/lizard", Options{
+				Languages: tt.language,
+				Threads:   1,
 			})
 
 			assert.NoError(t, err)
 			assert.NotEmpty(t, results)
+			assert.Len(t, results, 1)
+			assert.NotNil(t, results[0], "%s should be analyzed", tt.file)
 
-			var mainFile *FileStat
-			for _, file := range results {
-				if strings.HasSuffix(file.Path, tt.mainFileName) {
-					mainFile = file
-					break
-				}
-			}
-
-			assert.NotNil(t, mainFile, "%s should be analyzed", tt.mainFileName)
-
-			for _, fn := range mainFile.Functions {
+			for _, fn := range results[0].Functions {
 				expectedComplexity, exists := tt.expectedFuncs[fn.Name]
 				if exists {
 					assert.Equal(t, expectedComplexity, fn.Compexity,
 						"Function %s should have complexity %d", fn.Name, expectedComplexity)
 				}
+			}
+		})
+	}
+}
+
+func TestCheckLizardExecutable(t *testing.T) {
+	originalPath := os.Getenv("PATH")
+	defer os.Setenv("PATH", originalPath)
+
+	tempDir := t.TempDir()
+	fakeLizardPath := filepath.Join(tempDir, "lizard")
+	err := os.WriteFile(fakeLizardPath, []byte(""), 0755)
+	
+	if err != nil {
+		t.Fatalf("failed to create fake lizard executable: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		pathValue string
+		wantErr   bool
+	}{
+		{
+			name:      "lizard exists in PATH",
+			pathValue: tempDir + ":" + originalPath,
+			wantErr:   false,
+		},
+		{
+			name:      "lizard not in PATH",
+			pathValue: "/nonexistent/path",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("PATH", tt.pathValue)
+			err := CheckLizardExecutable()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, "lizard executable not found", err.Error())
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

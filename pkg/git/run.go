@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"github.com/vbvictor/ccv/pkg/complexity"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vbvictor/ccv/pkg/complexity"
 
 	"github.com/spf13/pflag"
 	"golang.org/x/exp/maps"
@@ -50,31 +51,29 @@ func (d *Date) Set(value string) error {
 }
 
 type ChurnOptions struct {
-	CommitCount  int
 	SortBy       SortType
 	Top          int
 	Path         string
 	ExcludePath  string
-	Extensions   string
+	Extensions   map[string]struct{}
 	Since        Date
 	Until        Date
 	OutputFormat OutputType
 }
 
 var ChurnOpts = ChurnOptions{
-	CommitCount:  0,
 	SortBy:       Changes,
 	Top:          10,
 	Path:         "",
 	ExcludePath:  "",
-	Extensions:   "",
+	Extensions:   nil,
 	Since:        Date{},
 	Until:        Date{},
 	OutputFormat: Tabular,
 }
 
 func PrintRepoStats(repoPath string) error {
-	churns, err := MostChurnFiles(repoPath)
+	churns, err := MostGitChurnFiles(repoPath)
 	if err != nil {
 		return fmt.Errorf("error getting churn metrics: %w", err)
 	}
@@ -82,16 +81,27 @@ func PrintRepoStats(repoPath string) error {
 	return printStats(churns, os.Stdout, ChurnOpts)
 }
 
-func MostChurnFiles(repoPath string) ([]*complexity.ChurnChunk, error) {
-	return ReadChurn(repoPath, ChurnOpts)
+func MostGitChurnFiles(repoPath string) ([]*complexity.ChurnChunk, error) {
+	return ReadGitChurn(repoPath, ChurnOpts)
 }
 
-func ReadChurn(repoPath string, opts ChurnOptions) ([]*complexity.ChurnChunk, error) {
-	cmd := []string{"git", "log", "--pretty=format:%H", "--numstat"}
-
-	if opts.CommitCount > 0 {
-		cmd = append(cmd, fmt.Sprintf("-n%d", opts.CommitCount))
+func ReadGitChurn(repoPath string, opts ChurnOptions) ([]*complexity.ChurnChunk, error) {
+	cmd := buildGitCommand(repoPath, opts)
+	output, err := executeGitCommand(cmd, repoPath)
+	if err != nil {
+		return nil, err
 	}
+
+	fileStats := make(map[string]*complexity.ChurnChunk)
+	lines := strings.Split(string(output), "\n")
+
+	processLines(lines, fileStats, opts)
+
+	return sortAndLimit(maps.Values(fileStats), opts.SortBy, opts.Top), nil
+}
+
+func buildGitCommand(repoPath string, opts ChurnOptions) []string {
+	cmd := []string{"git", "log", "--pretty=format:%H", "--numstat"}
 
 	if !opts.Since.IsZero() {
 		cmd = append(cmd, fmt.Sprintf("--since=%s", opts.Since.String()))
@@ -102,17 +112,22 @@ func ReadChurn(repoPath string, opts ChurnOptions) ([]*complexity.ChurnChunk, er
 	}
 
 	cmd = append(cmd, "--", repoPath)
+	return cmd
+}
 
+func executeGitCommand(cmd []string, repoPath string) ([]byte, error) {
 	gitCmd := exec.Command(cmd[0], cmd[1:]...)
 	gitCmd.Dir = repoPath
+	
 	output, err := gitCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute git command: %v", err)
 	}
+	
+	return output, nil
+}
 
-	fileStats := make(map[string]*complexity.ChurnChunk)
-	lines := strings.Split(string(output), "\n")
-
+func processLines(lines []string, fileStats map[string]*complexity.ChurnChunk, opts ChurnOptions) {
 	currentCommit := ""
 	modifiedInCommit := make(map[string]bool)
 
@@ -122,41 +137,50 @@ func ReadChurn(repoPath string, opts ChurnOptions) ([]*complexity.ChurnChunk, er
 		}
 
 		if len(line) == 40 { // Commit hash
-			if currentCommit != "" && len(modifiedInCommit) > 0 {
-				for filepath := range modifiedInCommit {
-					if shouldSkipFile(filepath, opts.ExcludePath, opts.Extensions) {
-						continue
-					}
-					fileStats[filepath].Commits++
-				}
-			}
+			processCommit(currentCommit, modifiedInCommit, fileStats, opts)
 			currentCommit = line
 			modifiedInCommit = make(map[string]bool)
 		} else {
-			parts := strings.Fields(line)
-			if len(parts) == 3 && isNumeric(parts[0]) && isNumeric(parts[1]) {
-				additions, _ := strconv.Atoi(parts[0])
-				deletions, _ := strconv.Atoi(parts[1])
-				filepath := parts[2]
-
-				if shouldSkipFile(filepath, opts.ExcludePath, opts.Extensions) {
-					continue
-				}
-
-				if _, exists := fileStats[filepath]; !exists {
-					fileStats[filepath] = &complexity.ChurnChunk{File: filepath}
-				}
-
-				fileStats[filepath].Added += uint(additions)
-				fileStats[filepath].Removed += uint(deletions)
-				fileStats[filepath].Churn += uint(additions + deletions)
-				modifiedInCommit[filepath] = true
-			}
+			processFileLine(line, fileStats, modifiedInCommit, opts)
 		}
 	}
+}
 
-	result := maps.Values(fileStats)
-	return sortAndLimit(result, opts.SortBy, opts.Top), nil
+func processCommit(currentCommit string, modifiedInCommit map[string]bool, fileStats map[string]*complexity.ChurnChunk, opts ChurnOptions) {
+	if currentCommit != "" && len(modifiedInCommit) > 0 {
+		for filepath := range modifiedInCommit {
+			if shouldSkipFile(filepath, opts) {
+				continue
+			}
+			fileStats[filepath].Commits++
+		}
+	}
+}
+
+func processFileLine(line string, fileStats map[string]*complexity.ChurnChunk, modifiedInCommit map[string]bool, opts ChurnOptions) {
+	parts := strings.Fields(line)
+	if len(parts) == 3 && isNumeric(parts[0]) && isNumeric(parts[1]) {
+		additions, _ := strconv.Atoi(parts[0])
+		deletions, _ := strconv.Atoi(parts[1])
+		filepath := parts[2]
+
+		if shouldSkipFile(filepath, opts) {
+			return
+		}
+
+		updateFileStats(fileStats, filepath, additions, deletions)
+		modifiedInCommit[filepath] = true
+	}
+}
+
+func updateFileStats(fileStats map[string]*complexity.ChurnChunk, filepath string, additions, deletions int) {
+	if _, exists := fileStats[filepath]; !exists {
+		fileStats[filepath] = &complexity.ChurnChunk{File: filepath}
+	}
+
+	fileStats[filepath].Added += uint(additions)
+	fileStats[filepath].Removed += uint(deletions)
+	fileStats[filepath].Churn += uint(additions + deletions)
 }
 
 func isNumeric(s string) bool {
@@ -164,24 +188,17 @@ func isNumeric(s string) bool {
 	return err == nil
 }
 
-func shouldSkipFile(file, excludePath, extensions string) bool {
-	if excludePath != "" {
-		if matched, _ := regexp.MatchString(excludePath, file); matched {
+func shouldSkipFile(file string, opts ChurnOptions) bool {
+	if opts.ExcludePath != "" {
+		if matched, _ := regexp.MatchString(opts.ExcludePath, file); matched {
 			return true
 		}
 	}
+	
+	if opts.Extensions != nil {
+		ext := filepath.Ext(file)[1:]
 
-	if extensions != "" {
-		ext := filepath.Ext(file)
-		allowedExts := strings.Split(extensions, ",")
-		found := false
-		for _, allowedExt := range allowedExts {
-			if "."+strings.TrimSpace(allowedExt) == ext {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if _, exists := opts.Extensions[ext]; !exists {
 			return true
 		}
 	}

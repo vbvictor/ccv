@@ -10,22 +10,18 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
-type Engine = string
-
-var (
-	Lizard Engine = "lizard"
-)
-
-type ComplexityOptions struct {
-	Extensions string
-	Threads    int
+type Options struct {
+	Languages string
+	Threads   int
 }
 
-var ComplexityOpts = ComplexityOptions{
-	Extensions: "",
-	Threads: 1,
+var Opts = Options{
+	Languages: "",
+	Threads:   1,
 }
 
 type lizardItem struct {
@@ -53,18 +49,24 @@ type lizardXML struct {
 
 var lizardFileRe = regexp.MustCompile(`(.*?)\s+at\s+(.*?):(\d+)`)
 
-func RunLizardCmd(repoPath string, opts ComplexityOptions) (FilesStat, error) {
+func CheckLizardExecutable() error {
 	_, err := exec.LookPath("lizard")
+	
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("lizard executable not found") // Give plesant error message
 	}
 
+	return nil
+}
+
+func RunLizardCmd(repoPath string, opts Options) (FilesStat, error) {
+	// TODO: Walk filepath to be sure such files exist
+	// If no files exist print that no files and return empty FilesStat
+	
 	cmd := []string{"lizard", "-s", "cyclomatic_complexity", "-m", "-X", "-t", strconv.Itoa(opts.Threads)}
 
-	if opts.Extensions != "" {
-		// Walk filepath to be sure such files exist
-		// If no files exist print that no files and return empty FilesStat
-		allowedExts := strings.Split(opts.Extensions, ",")
+	if opts.Languages != "" {
+		allowedExts := strings.Split(opts.Languages, ",")
 		for _, ext := range allowedExts {
 			cmd = append(cmd, "-l", ext)
 		}
@@ -73,16 +75,17 @@ func RunLizardCmd(repoPath string, opts ComplexityOptions) (FilesStat, error) {
 	cmd = append(cmd, repoPath)
 	lizardCmd := exec.Command(cmd[0], cmd[1:]...)
 	output, err := lizardCmd.Output()
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to run lizard: %w", err)
 	}
 
-	lizard, err := ReadLizardXML(bytes.NewReader(output))
+	lizard, err := readLizardXML(bytes.NewReader(output))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse lizard output: %w", err)
+		return nil, fmt.Errorf("failed to read lizard output: %w", err)
 	}
 
-	return ParseLizard(lizard)
+	return parseLizard(lizard)
 }
 
 func parseItem(item lizardItem) (FunctionStat, error) {
@@ -112,7 +115,7 @@ func parseItem(item lizardItem) (FunctionStat, error) {
 	}, nil
 }
 
-func ReadLizardXML(r io.Reader) (*lizardXML, error) {
+func readLizardXML(r io.Reader) (*lizardXML, error) {
 	var lizard lizardXML
 	if err := xml.NewDecoder(r).Decode(&lizard); err != nil {
 		return nil, err
@@ -121,17 +124,17 @@ func ReadLizardXML(r io.Reader) (*lizardXML, error) {
 	return &lizard, nil
 }
 
-func ParseLizard(lizard *lizardXML) (FilesStat, error) {
+func parseLizard(lizard *lizardXML) (FilesStat, error) {
 	type Filename = string
-	fileMap := make(map[Filename]*FileStat)
+
+	fileStat := make(map[Filename]FileStat)
 
 	filesIdx := slices.IndexFunc(lizard.Measures, func(l lizardMeasure) bool {
 		return l.Type == "File"
 	})
 
 	for _, file := range lizard.Measures[filesIdx].Items {
-		fileMap[file.Name] = new(FileStat)
-		fileMap[file.Name].Path = file.Name
+		fileStat[file.Name] = FileStat{Path: file.Name}
 	}
 
 	funcIdx := slices.IndexFunc(lizard.Measures, func(l lizardMeasure) bool {
@@ -139,19 +142,15 @@ func ParseLizard(lizard *lizardXML) (FilesStat, error) {
 	})
 
 	for _, function := range lizard.Measures[funcIdx].Items {
-		stat, err := parseItem(function)
+		funcStat, err := parseItem(function)
 		if err != nil {
 			return nil, err
 		}
 
-		fileMap[stat.File].Functions = append(fileMap[stat.File].Functions, stat)
+		file := fileStat[funcStat.File]
+		file.Functions = append(fileStat[funcStat.File].Functions, funcStat)
+		fileStat[funcStat.File] = file
 	}
 
-	// Convert map to slice
-	result := make([]*FileStat, 0, len(fileMap))
-	for _, fileStat := range fileMap {
-		result = append(result, fileStat)
-	}
-
-	return result, nil
+	return maps.Values(fileStat), nil
 }
