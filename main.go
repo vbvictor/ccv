@@ -15,6 +15,7 @@ import (
 
 // File to store the output graph
 var outputFile = ""
+var ComplexityFuncThreshold uint = 5
 
 func main() {
 	cmdPlot := &cobra.Command{
@@ -62,11 +63,11 @@ func main() {
 			}
 
 			// Prepare plot data
-			files = process.ApplyFilters(files, process.ComplexityFilter{MinComplexity: 5}.Filter)
+			files = process.ApplyFilters(files, process.ComplexityFilter{MinComplexity: ComplexityFuncThreshold}.Filter)
 			entries := process.PreparePlotData(files, churns)
 
 			// Generate plot
-			if err := plot.CreateScatterChart(entries, plot.NewRisksMapper(), outputFile); err != nil {
+			if err := plot.CreateScatterChart(entries, &plot.NoopMapper{}, outputFile); err != nil {
 				return fmt.Errorf("error creating chart: %w\n", err)
 			}
 
@@ -81,13 +82,15 @@ func main() {
 	flags := cmdPlot.PersistentFlags()
 	flags.StringVarP(&outputFile, "output", "o", "complexity_churn.html", "Output file path")
 	flags.BoolVarP(&process.Verbose, "verbose", "v", false, "Enable verbose output")
-	flags.StringVarP(&process.Plot, "plot-type", "t", "changes", "Specify OY plot type")
-	flags.UintVar(&plot.VeryLowRisk, "very-low-risk", 10, "Very Low Risk threshold")
-	flags.UintVar(&plot.LowRisk, "low-risk", 15, "Low Risk threshold")
-	flags.UintVar(&plot.MediumRisk, "medium-risk", 20, "Medium Risk threshold")
-	flags.UintVar(&plot.HighRisk, "high-risk", 25, "High Risk threshold")
-	flags.UintVar(&plot.VeryHighRisk, "very-high-risk", 30, "Very High Risk threshold")
-	flags.UintVar(&plot.CriticalRisk, "critical-risk", 35, "Critical Risk threshold")
+	flags.StringVarP(&process.Plot, "plot-type", "t", "commits", "Specify OY plot type: [commits, changes]")
+	flags.UintVarP(&ComplexityFuncThreshold, "min-complexity", "m", 5, "Complexity threshold to delete functions with low complexity from the plot")
+
+	// flags.UintVar(&plot.VeryLowRisk, "very-low-risk", 10, "Very Low Risk threshold")
+	// flags.UintVar(&plot.LowRisk, "low-risk", 15, "Low Risk threshold")
+	// flags.UintVar(&plot.MediumRisk, "medium-risk", 20, "Medium Risk threshold")
+	// flags.UintVar(&plot.HighRisk, "high-risk", 25, "High Risk threshold")
+	// flags.UintVar(&plot.VeryHighRisk, "very-high-risk", 30, "Very High Risk threshold")
+	// flags.UintVar(&plot.CriticalRisk, "critical-risk", 35, "Critical Risk threshold")
 
 	var cmdChurn = &cobra.Command{
 		Use:   "churn <repository>",
@@ -121,7 +124,6 @@ func main() {
 	cmdChurn.Flag("since").DefValue = "none"
 	cmdChurn.Flag("until").DefValue = "none"
 
-
 	var cmdComplexity = &cobra.Command{
 		Use:   "complexity <path>",
 		Short: "Get complexity metrics of a repository",
@@ -142,7 +144,7 @@ func main() {
 			}
 
 			complexity.PrintTabular(fileStat, os.Stdout)
-			
+
 			return nil
 		},
 	}

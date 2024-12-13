@@ -38,7 +38,6 @@ func ValidateRiskThresholds() error {
 	return nil
 }
 
-
 func getRiskLevels() []RiskLevel {
 	return []RiskLevel{
 		{Name: "Very Low Risk", Color: "#90EE90", Min: VeryLowRisk, Max: LowRisk - 1},
@@ -46,7 +45,7 @@ func getRiskLevels() []RiskLevel {
 		{Name: "Medium Risk", Color: "#ffd700", Min: MediumRisk, Max: HighRisk - 1},
 		{Name: "High Risk", Color: "#ffa64d", Min: HighRisk, Max: VeryHighRisk - 1},
 		{Name: "Very High Risk", Color: "#ff4d4d", Min: VeryHighRisk, Max: CriticalRisk - 1},
-		{Name: "Critical Risk", Color: "#8b0000", Min: CriticalRisk, Max: ^uint(0)},
+		{Name: "Critical Risk", Color: "#731343", Min: CriticalRisk, Max: ^uint(0)},
 	}
 }
 
@@ -70,26 +69,41 @@ func NewRisksMapper() *RisksMapper {
 }
 
 var _ EntryMapper = (*RisksMapper)(nil)
-	func (rm *RisksMapper) Map(data ScatterData) Category {
-		riskScore := data.Complexity + float64(data.Churn)
-	
-		for _, level := range rm.levels {
-			if riskScore >= float64(level.Min) && riskScore <= float64(level.Max) {
-				return level.Name
-			}
+
+func (rm *RisksMapper) Map(data ScatterData) Category {
+	riskScore := data.Complexity + float64(data.Churn)
+
+	for _, level := range rm.levels {
+		if riskScore >= float64(level.Min) && riskScore <= float64(level.Max) {
+			return level.Name
 		}
-	
-		return "Unknown"
 	}
 
-	func (rm *RisksMapper) Style(category Category) opts.ItemStyle {
-		for _, level := range rm.levels {
-			if level.Name == category {
-				return opts.ItemStyle{
-					Color: level.Color,
-				}
+	return "Unknown"
+}
+
+func (rm *RisksMapper) Style(category Category) opts.ItemStyle {
+	for _, level := range rm.levels {
+		if level.Name == category {
+			return opts.ItemStyle{
+				Color: level.Color,
 			}
 		}
-	
-		return opts.ItemStyle{}
 	}
+
+	return opts.ItemStyle{}
+}
+
+type NoopMapper struct{}
+
+var _ EntryMapper = (*NoopMapper)(nil)
+
+func (rm *NoopMapper) Map(data ScatterData) Category {
+	return "Risk"
+}
+
+func (rm *NoopMapper) Style(category Category) opts.ItemStyle {
+	return opts.ItemStyle{
+		Color: "#731343",
+	}
+}

@@ -2,6 +2,8 @@ package process
 
 import (
 	"fmt"
+	"math"
+
 	"github.com/vbvictor/ccv/pkg/complexity"
 
 	"github.com/vbvictor/ccv/pkg/plot"
@@ -147,6 +149,9 @@ func PreparePlotData(files complexity.FilesStat, churns []*complexity.ChurnChunk
 		default:
 			panic("Unknown plot type")
 		}
+
+		// Round values to 2 decimal places
+		entry.Complexity = math.Round(entry.Complexity*100) / 100
 
 		result = append(result, entry)
 	}
