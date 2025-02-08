@@ -5,14 +5,16 @@ import (
 	"os"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
-	"golang.org/x/exp/maps"
+	"github.com/vbvictor/ccv/pkg/complexity"
 )
 
 type ScatterData struct {
 	Complexity float64
-	Churn      uint
+	Churn      int
 }
 
 type ScatterEntry struct {
@@ -29,10 +31,10 @@ type Category = string
 
 type ScatterSeries map[Category][]opts.ScatterData
 
-// TODO: Maybe categorizer?
+// TODO(v.baranov): Maybe categorizer?
 type EntryMapper interface {
-	Map(ScatterData) Category
-	Style(Category) opts.ItemStyle
+	Map(data ScatterData) Category
+	Style(category Category) opts.ItemStyle
 }
 
 func groupByFile(entries []ScatterEntry) []groupedEntry {
@@ -68,8 +70,12 @@ func formDataSeries(entries []ScatterEntry, mapper EntryMapper) ScatterSeries {
 	return series
 }
 
-// TODO: pass EntryMapper as parameter!
-func CreateScatterChart(entries []ScatterEntry, mapper EntryMapper, outputPath string) error {
+// CreateScatterChart generates a scatter plot from the provided entries.
+func CreateScatterChart(
+	entries []ScatterEntry,
+	mapper EntryMapper,
+	outputPath string,
+) error {
 	scatter := charts.NewScatter()
 	scatter.SetGlobalOptions(
 		charts.WithTitleOpts(opts.Title{
@@ -136,11 +142,65 @@ func CreateScatterChart(entries []ScatterEntry, mapper EntryMapper, outputPath s
 		)
 	}
 
-	f, err := os.Create(outputPath)
+	file, err := os.Create(outputPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create file for graph: %w", err)
 	}
-	defer f.Close()
+	defer file.Close()
 
-	return scatter.Render(f)
+	err = scatter.Render(file)
+	if err != nil {
+		return fmt.Errorf("failed to render graph: %w", err)
+	}
+
+	return nil
 }
+
+// Skip file if it is not found in chunk or files, first goes over all churns
+// Matches based on filename.
+func PreparePlotData(files complexity.FilesStat, churns []*complexity.ChurnChunk) []ScatterEntry {
+	result := make([]ScatterEntry, 0)
+
+	fileComplexities := complexity.AvgComplexity(files)
+
+	// Create map for quick churn lookup
+	churnMap := make(map[string]*complexity.ChurnChunk)
+	for _, churn := range churns {
+		churnMap[churn.File] = churn
+	}
+
+	// Match files with churns and create chart entries
+	for _, fileComplexity := range fileComplexities {
+		churn, exists := churnMap[fileComplexity.File]
+		if !exists {
+			continue
+		}
+
+		entry := ScatterEntry{
+			File:        fileComplexity.File,
+			ScatterData: ScatterData{Complexity: fileComplexity.Complexity, Churn: 0},
+		}
+
+		switch Plot {
+		case Commits:
+			entry.Churn = churn.Commits
+		case Changes:
+			entry.Churn = churn.Churn
+		default:
+			panic("Unknown plot type")
+		}
+
+		result = append(result, entry)
+	}
+
+	return result
+}
+
+type ScatterOXType = string
+
+const (
+	Commits ScatterOXType = "commits"
+	Changes ScatterOXType = "changes"
+)
+
+var Plot = Commits

@@ -11,12 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vbvictor/ccv/pkg/complexity"
+
 	"github.com/spf13/pflag"
-	"github.com/vbvictor/ccv/pkg/read"
 	"golang.org/x/exp/maps"
 )
 
-// SortType represents the type of sorting to be performed on the results of git log
+// SortType represents the type of sorting to be performed on the results of git log.
 type SortType = string
 
 var (
@@ -24,6 +25,11 @@ var (
 	Additions SortType = "additions"
 	Deletions SortType = "deletions"
 	Commits   SortType = "commits"
+)
+
+const (
+	DefaultTop = 10
+	HashLength = 40
 )
 
 var _ pflag.Value = (*Date)(nil)
@@ -43,38 +49,38 @@ func (d *Date) String() string {
 func (d *Date) Set(value string) error {
 	parsedTime, err := time.Parse(time.DateOnly, value)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse time: %w", err)
 	}
+
 	*d = Date{parsedTime}
+
 	return nil
 }
 
 type ChurnOptions struct {
-	CommitCount  int
 	SortBy       SortType
 	Top          int
 	Path         string
 	ExcludePath  string
-	Extensions   string
+	Extensions   map[string]struct{}
 	Since        Date
 	Until        Date
 	OutputFormat OutputType
 }
 
 var ChurnOpts = ChurnOptions{
-	CommitCount:  0,
 	SortBy:       Changes,
-	Top:          10,
+	Top:          DefaultTop,
 	Path:         "",
 	ExcludePath:  "",
-	Extensions:   "",
+	Extensions:   nil,
 	Since:        Date{},
 	Until:        Date{},
 	OutputFormat: Tabular,
 }
 
 func PrintRepoStats(repoPath string) error {
-	churns, err := MostChurnFiles(repoPath)
+	churns, err := MostGitChurnFiles(repoPath)
 	if err != nil {
 		return fmt.Errorf("error getting churn metrics: %w", err)
 	}
@@ -82,106 +88,134 @@ func PrintRepoStats(repoPath string) error {
 	return printStats(churns, os.Stdout, ChurnOpts)
 }
 
-func MostChurnFiles(repoPath string) ([]*read.ChurnChunk, error) {
-	return ReadChurn(repoPath, ChurnOpts)
+func MostGitChurnFiles(repoPath string) ([]*complexity.ChurnChunk, error) {
+	return ReadGitChurn(repoPath, ChurnOpts)
 }
 
-func ReadChurn(repoPath string, opts ChurnOptions) ([]*read.ChurnChunk, error) {
-	cmd := []string{"git", "log", "--pretty=format:%H", "--numstat"}
-	
-	if opts.CommitCount > 0 {
-		cmd = append(cmd, fmt.Sprintf("-n%d", opts.CommitCount))
+func ReadGitChurn(repoPath string, opts ChurnOptions) ([]*complexity.ChurnChunk, error) {
+	cmd := buildGitCommand(repoPath, opts)
+
+	output, err := executeGitCommand(cmd, repoPath)
+	if err != nil {
+		return nil, err
 	}
 
+	fileStats := make(map[string]*complexity.ChurnChunk)
+	lines := strings.Split(string(output), "\n")
+
+	processLines(lines, fileStats, opts)
+
+	return sortAndLimit(maps.Values(fileStats), opts.SortBy, opts.Top), nil
+}
+
+func buildGitCommand(repoPath string, opts ChurnOptions) []string {
+	cmd := []string{"git", "log", "--pretty=format:%H", "--numstat"}
+
 	if !opts.Since.IsZero() {
-		cmd = append(cmd, fmt.Sprintf("--since=%s", opts.Since.String()))
+		cmd = append(cmd, "--since="+opts.Since.String())
 	}
 
 	if !opts.Until.IsZero() {
-		cmd = append(cmd, fmt.Sprintf("--until=%s", opts.Until.String()))
+		cmd = append(cmd, "--until="+opts.Until.String())
 	}
 
 	cmd = append(cmd, "--", repoPath)
 
-	gitCmd := exec.Command(cmd[0], cmd[1:]...)
+	return cmd
+}
+
+func executeGitCommand(cmd []string, repoPath string) ([]byte, error) {
+	gitCmd := exec.Command(cmd[0], cmd[1:]...) //nolint:gosec // This command is built via buildGitCommand
 	gitCmd.Dir = repoPath
+
 	output, err := gitCmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute git command: %v", err)
+		return nil, fmt.Errorf("failed to execute git command: %w", err)
 	}
 
-	fileStats := make(map[string]*read.ChurnChunk)
-	lines := strings.Split(string(output), "\n")
-	
+	return output, nil
+}
+
+func processLines(lines []string, fileStats map[string]*complexity.ChurnChunk, opts ChurnOptions) {
 	currentCommit := ""
 	modifiedInCommit := make(map[string]bool)
 
 	for _, line := range lines {
-		if len(line) == 0 {
+		if line == "" {
 			continue
 		}
 
-		if len(line) == 40 { // Commit hash
-			if currentCommit != "" && len(modifiedInCommit) > 0 {
-				for filepath := range modifiedInCommit {
-					if shouldSkipFile(filepath, opts.ExcludePath, opts.Extensions) {
-						continue
-					}
-					fileStats[filepath].Commits++
-				}
-			}
+		if len(line) == HashLength {
+			processCommit(currentCommit, modifiedInCommit, fileStats, opts)
 			currentCommit = line
 			modifiedInCommit = make(map[string]bool)
 		} else {
-			parts := strings.Fields(line)
-			if len(parts) == 3 && isNumeric(parts[0]) && isNumeric(parts[1]) {
-				additions, _ := strconv.Atoi(parts[0])
-				deletions, _ := strconv.Atoi(parts[1])
-				filepath := parts[2]
-
-				if shouldSkipFile(filepath, opts.ExcludePath, opts.Extensions) {
-					continue
-				}
-
-				if _, exists := fileStats[filepath]; !exists {
-					fileStats[filepath] = &read.ChurnChunk{File: filepath}
-				}
-
-				fileStats[filepath].Added += uint(additions)
-				fileStats[filepath].Removed += uint(deletions)
-				fileStats[filepath].Churn += uint(additions + deletions)
-				modifiedInCommit[filepath] = true
-			}
+			processFileLine(line, fileStats, modifiedInCommit, opts)
 		}
 	}
+}
 
-	result := maps.Values(fileStats)
-	return sortAndLimit(result, opts.SortBy, opts.Top), nil
+func processCommit(currentCommit string, modifiedInCommit map[string]bool, fileStats map[string]*complexity.ChurnChunk, opts ChurnOptions) {
+	if currentCommit != "" && len(modifiedInCommit) > 0 {
+		for filepath := range modifiedInCommit {
+			if shouldSkipFile(filepath, opts) {
+				continue
+			}
+
+			fileStats[filepath].Commits++
+		}
+	}
+}
+
+func processFileLine(line string, fileStats map[string]*complexity.ChurnChunk, modifiedInCommit map[string]bool, opts ChurnOptions) {
+	parts := strings.Fields(line)
+	if len(parts) == 3 && isNumeric(parts[0]) && isNumeric(parts[1]) {
+		additions, _ := strconv.Atoi(parts[0])
+		deletions, _ := strconv.Atoi(parts[1])
+
+		path := parts[2]
+
+		if shouldSkipFile(path, opts) {
+			return
+		}
+
+		updateFileStats(fileStats, path, additions, deletions)
+
+		modifiedInCommit[path] = true
+	}
+}
+
+func updateFileStats(fileStats map[string]*complexity.ChurnChunk, path string, additions, deletions int) {
+	if _, exists := fileStats[path]; !exists {
+		fileStats[path] = &complexity.ChurnChunk{File: path}
+	}
+
+	fileStats[path].Added += additions
+	fileStats[path].Removed += deletions
+	fileStats[path].Churn += additions + deletions
 }
 
 func isNumeric(s string) bool {
 	_, err := strconv.Atoi(s)
+
 	return err == nil
 }
 
-func shouldSkipFile(file, excludePath, extensions string) bool {
-	if excludePath != "" {
-		if matched, _ := regexp.MatchString(excludePath, file); matched {
+func shouldSkipFile(file string, opts ChurnOptions) bool {
+	if opts.ExcludePath != "" {
+		if matched, _ := regexp.MatchString(opts.ExcludePath, file); matched {
 			return true
 		}
 	}
 
-	if extensions != "" {
-		ext := filepath.Ext(file)
-		allowedExts := strings.Split(extensions, ",")
-		found := false
-		for _, allowedExt := range allowedExts {
-			if "."+strings.TrimSpace(allowedExt) == ext {
-				found = true
-				break
-			}
+	if opts.Extensions != nil {
+		fileExt := filepath.Ext(file)
+
+		if fileExt == "" {
+			return false
 		}
-		if !found {
+
+		if _, exists := opts.Extensions[fileExt[1:]]; !exists {
 			return true
 		}
 	}
@@ -189,7 +223,7 @@ func shouldSkipFile(file, excludePath, extensions string) bool {
 	return false
 }
 
-func sortAndLimit(result []*read.ChurnChunk, sortBy SortType, limit int) []*read.ChurnChunk {
+func sortAndLimit(result []*complexity.ChurnChunk, sortBy SortType, limit int) []*complexity.ChurnChunk {
 	less := func() func(i, j int) bool {
 		switch sortBy {
 		case Changes:

@@ -1,0 +1,32 @@
+linters:
+  enable-all: true
+  disable:
+    - gomnd
+    - execinquery
+    - exportloopref
+    - depguard
+    - godox
+    - gci
+    - testpackage
+    - exhaustruct
+    - gochecknoglobals # need to disable this for storing global configuration values since it is a CLI tool
+    - forbidigo # use printf for showing progress information and verbose output
+    - gochecknoinits # leave as for now here, we need init() functions to setup cobra commands
+linters-settings:
+  gocritic:
+    enable-all: true
+  funlen:
+    lines: 60
+    statements: 40
+    ignore-comments: true
+  paralleltest:
+    ignore-missing: true
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - funlen
+        - varnamelen
+  exclude-dirs:
+    - test/complexity
