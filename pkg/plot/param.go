@@ -9,6 +9,17 @@ var (
 	CriticalRisk uint = 35
 )
 
+type OutputType = string
+
+var (
+	CSV           OutputType = "csv"
+	Tabular       OutputType = "tabular"
+	Scatter       OutputType = "scatter"
+	OutputFormats            = []OutputType{Scatter, CSV, Tabular}
+)
+
+var OutputFormat = Tabular
+
 // If need to show scroll in chart
 var WithScroll = false
 

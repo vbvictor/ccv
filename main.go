@@ -14,8 +14,10 @@ import (
 )
 
 // File to store the output graph
-var outputFile = ""
-var ComplexityFuncThreshold uint = 5
+var (
+	outputFile                   = ""
+	ComplexityFuncThreshold uint = 5
+)
 
 func main() {
 	cmdPlot := &cobra.Command{
@@ -66,12 +68,25 @@ func main() {
 			files = process.ApplyFilters(files, process.ComplexityFilter{MinComplexity: ComplexityFuncThreshold}.Filter)
 			entries := process.PreparePlotData(files, churns)
 
-			// Generate plot
-			if err := plot.CreateScatterChart(entries, &plot.NoopMapper{}, outputFile); err != nil {
-				return fmt.Errorf("error creating chart: %w\n", err)
+			// Generate output
+			switch plot.OutputFormat {
+			case plot.Tabular:
+				if err := plot.CreateTableChart(entries, os.Stdout); err != nil {
+					return fmt.Errorf("error creating tabular chart: %w\n", err)
+				}
+			case plot.CSV:
+				if err := plot.CreateTableChart(entries, os.Stdout); err != nil {
+					return fmt.Errorf("error creating csv chart: %w\n", err)
+				}
+			case plot.Scatter:
+				if err := plot.CreateScatterChart(entries, &plot.NoopMapper{}, outputFile); err != nil {
+					return fmt.Errorf("error creating scatter chart: %w\n", err)
+				}
+			default:
+				return fmt.Errorf("Invalid output format: %s\n", plot.OutputFormat)
 			}
 
-			if process.Verbose {
+			if process.Verbose && plot.OutputFormat == plot.Scatter {
 				fmt.Printf("Chart generated: %s\n", outputFile)
 			}
 
@@ -84,15 +99,9 @@ func main() {
 	flags.BoolVarP(&process.Verbose, "verbose", "v", false, "Enable verbose output")
 	flags.StringVarP(&process.Plot, "plot-type", "t", "commits", "Specify OY plot type: [commits, changes]")
 	flags.UintVarP(&ComplexityFuncThreshold, "min-complexity", "m", 5, "Complexity threshold to delete functions with low complexity from the plot")
+	flags.StringVarP(&plot.OutputFormat, "output-format", "f", "tabular", "Specify output format: [tabular, csv, scatter]")
 
-	// flags.UintVar(&plot.VeryLowRisk, "very-low-risk", 10, "Very Low Risk threshold")
-	// flags.UintVar(&plot.LowRisk, "low-risk", 15, "Low Risk threshold")
-	// flags.UintVar(&plot.MediumRisk, "medium-risk", 20, "Medium Risk threshold")
-	// flags.UintVar(&plot.HighRisk, "high-risk", 25, "High Risk threshold")
-	// flags.UintVar(&plot.VeryHighRisk, "very-high-risk", 30, "Very High Risk threshold")
-	// flags.UintVar(&plot.CriticalRisk, "critical-risk", 35, "Critical Risk threshold")
-
-	var cmdChurn = &cobra.Command{
+	cmdChurn := &cobra.Command{
 		Use:   "churn <repository>",
 		Short: "Get churn metrics of a repository",
 		Args:  cobra.ExactArgs(1),
@@ -124,37 +133,8 @@ func main() {
 	cmdChurn.Flag("since").DefValue = "none"
 	cmdChurn.Flag("until").DefValue = "none"
 
-	var cmdComplexity = &cobra.Command{
-		Use:   "complexity <path>",
-		Short: "Get complexity metrics of a repository",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := filepath.Abs(args[0])
-			if err != nil {
-				return fmt.Errorf("error getting absolute path: %w", err)
-			}
-
-			if process.Verbose {
-				fmt.Printf("Processing repository: %s\n", path)
-			}
-
-			fileStat, err := complexity.RunLizardCmd(path, complexity.ComplexityOpts)
-			if err != nil {
-				return fmt.Errorf("error running lizard command: %w", err)
-			}
-
-			complexity.PrintTabular(fileStat, os.Stdout)
-
-			return nil
-		},
-	}
-
-	flags = cmdComplexity.PersistentFlags()
-	flags.StringVar(&complexity.ComplexityOpts.Extensions, "languages", "", "Only include files with given languages in comma-separated list. For example cpp,python")
-	flags.IntVar(&complexity.ComplexityOpts.Threads, "t", 1, "Number of threads to run")
-
-	var rootCmd = &cobra.Command{Use: "ccv"}
-	rootCmd.AddCommand(cmdPlot, cmdChurn, cmdComplexity)
+	rootCmd := &cobra.Command{Use: "ccv"}
+	rootCmd.AddCommand(cmdPlot, cmdChurn)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
